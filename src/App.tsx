@@ -7,8 +7,7 @@ const App: React.FC = () => {
       <h1>My React Quiz</h1>
       <Quiz />
     </div>
-  );
+  )
 }
 
-export default App;
-
+export default App
