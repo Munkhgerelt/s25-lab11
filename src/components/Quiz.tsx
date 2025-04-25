@@ -6,10 +6,8 @@ interface QuizState {
   questions: QuizQuestion[]
   currentQuestionIndex: number
   selectedAnswer: string | null
-  score: number
   isQuizFinished: boolean
-  answerFeedback: string | null // For feedback message
-  isAnswerSubmitted: boolean // Flag to control answer submission
+  userAnswers: string[] // Track all user answers
 }
 
 const Quiz: React.FC = () => {
@@ -35,49 +33,43 @@ const Quiz: React.FC = () => {
     questions: initialQuestions,
     currentQuestionIndex: 0,
     selectedAnswer: null,
-    score: 0,
     isQuizFinished: false,
-    answerFeedback: null,
-    isAnswerSubmitted: false // Initially, the answer is not submitted
+    userAnswers: Array(initialQuestions.length).fill(null)
   })
 
   const handleOptionSelect = (option: string): void => {
-    if (state.isAnswerSubmitted) return // Prevent selecting other answers after submission
-    setState((prevState) => ({ ...prevState, selectedAnswer: option }))
+    setState(prev => ({ ...prev, selectedAnswer: option }))
   }
-
-  const handleSubmitAnswer = (): void => {
-    if (state.selectedAnswer === null) return // Prevent submission if no answer is selected
-
-    const { selectedAnswer, currentQuestionIndex, questions, score } = state
-    const currentQuestion = questions[currentQuestionIndex]
-
-    const isCorrect = selectedAnswer === currentQuestion.correctAnswer
-    const updatedScore = isCorrect ? score + 1 : score
-
-    setState((prevState) => ({
-      ...prevState,
-      score: updatedScore,
-      answerFeedback: isCorrect ? 'Correct!' : `Incorrect! The correct answer was ${currentQuestion.correctAnswer}.`,
-      isAnswerSubmitted: true // Disable answer selection and show feedback
-    }))
-  }
-
+  
   const handleNextQuestion = (): void => {
-    const { currentQuestionIndex, questions } = state
-
+    const { currentQuestionIndex, questions, selectedAnswer } = state
+  
+    // Ensure selectedAnswer is not null before saving it to userAnswers
+    const updatedUserAnswers = [...state.userAnswers]
+    updatedUserAnswers[currentQuestionIndex] = selectedAnswer || ''  // default to '' if null
+  
     if (currentQuestionIndex + 1 >= questions.length) {
-      setState((prevState) => ({
-        ...prevState,
-        isQuizFinished: true
+      setState(prev => ({
+        ...prev,
+        isQuizFinished: true,
+        userAnswers: updatedUserAnswers
       }))
     } else {
-      setState((prevState) => ({
-        ...prevState,
+      setState(prev => ({
+        ...prev,
         currentQuestionIndex: currentQuestionIndex + 1,
         selectedAnswer: null,
-        answerFeedback: null,
-        isAnswerSubmitted: false // Allow answering again
+        userAnswers: updatedUserAnswers
+      }))
+    }
+  }  
+
+  const handlePreviousQuestion = (): void => {
+    if (state.currentQuestionIndex > 0) {
+      setState(prev => ({
+        ...prev,
+        currentQuestionIndex: prev.currentQuestionIndex - 1,
+        selectedAnswer: prev.userAnswers[prev.currentQuestionIndex - 1]
       }))
     }
   }
@@ -87,20 +79,34 @@ const Quiz: React.FC = () => {
       questions: initialQuestions,
       currentQuestionIndex: 0,
       selectedAnswer: null,
-      score: 0,
       isQuizFinished: false,
-      answerFeedback: null,
-      isAnswerSubmitted: false
+      userAnswers: Array(initialQuestions.length).fill(null)
     })
   }
 
-  const { questions, currentQuestionIndex, selectedAnswer, score, isQuizFinished, answerFeedback, isAnswerSubmitted } = state
+  const { questions, currentQuestionIndex, selectedAnswer, isQuizFinished, userAnswers } = state
 
   if (isQuizFinished) {
+    // Calculate number of correct answers
+    const correctAnswers = questions.reduce((count, question, index) => {
+      return count + (userAnswers[index] === question.correctAnswer ? 1 : 0)
+    }, 0)
+
     return (
       <div>
         <h2>Quiz Completed</h2>
-        <p>Final Score: {score} out of {questions.length}</p>
+        <p>You got {correctAnswers} out of {questions.length} questions correct!</p>
+        
+        <h3>Questions Review:</h3>
+        {questions.map((question, index) => (
+          <div key={index}>
+            <h4>Question {index + 1}: {question.question}</h4>
+            <p>Your answer: {userAnswers[index] || 'Not answered'}</p>
+            <p>Correct answer: {question.correctAnswer}</p>
+            <hr />
+          </div>
+        ))}
+
         <button onClick={handleRestart}>Restart Quiz</button>
       </div>
     )
@@ -115,51 +121,30 @@ const Quiz: React.FC = () => {
 
       <h3>Answer Options:</h3>
       <ul>
-        {currentQuestion.options.map((option) => {
-          let optionClass = ''
-          if (isAnswerSubmitted) {
-            if (option === selectedAnswer) {
-              optionClass = option === currentQuestion.correctAnswer ? 'correct' : 'incorrect'
-            } else if (option === currentQuestion.correctAnswer) {
-              optionClass = 'correct' // Highlight the correct answer if the user selected the wrong one
-            }
-          }
-
-          return (
-            <li
-              key={option}
-              onClick={() => handleOptionSelect(option)}
-              className={`${optionClass} ${selectedAnswer === option ? 'selected' : ''}`}
-              style={{ cursor: isAnswerSubmitted ? 'not-allowed' : 'pointer' }} // Prevent further clicks after answer submission
-            >
-              {option}
-            </li>
-          )
-        })}
+        {currentQuestion.options.map(option => (
+          <li
+            key={option}
+            onClick={() => handleOptionSelect(option)}
+            className={selectedAnswer === option ? 'selected' : ''}
+          >
+            {option}
+          </li>
+        ))}
       </ul>
 
       <h3>Selected Answer:</h3>
       <p>{selectedAnswer ?? 'No answer selected'}</p>
 
-      {/* Show feedback after submitting an answer */}
-      {answerFeedback != null && answerFeedback !== '' && <p>{answerFeedback}</p>}
-
-      {!isAnswerSubmitted
-        ? (
-          <button
-            onClick={handleSubmitAnswer}
-            disabled={selectedAnswer === null}
-          >
-            Submit Answer
-          </button>
-          )
-        : (
-          <button onClick={handleNextQuestion}>
-            {currentQuestionIndex === questions.length - 1
-              ? 'Finish Quiz'
-              : 'Next Question'}
-          </button>
-          )}
+      <button
+        onClick={handlePreviousQuestion}
+        disabled={currentQuestionIndex === 0}
+      >
+        Previous Question
+      </button>
+      
+      <button onClick={handleNextQuestion}>
+        {currentQuestionIndex === questions.length - 1 ? 'Finish Quiz' : 'Next Question'}
+      </button>
     </div>
   )
 }
